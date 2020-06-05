@@ -2,6 +2,7 @@ import math
 import os
 from tempfile import NamedTemporaryFile
 
+from scipy.fft import fftn
 import librosa
 import numpy as np
 import scipy.signal
@@ -29,6 +30,25 @@ def load_audio(path):
         else:
             sound = sound.mean(axis=1)  # multiple channels, average
     return sound
+
+
+def load_emg(path):
+    utterance = np.array([])
+    # read EMG data file for 1 utterance
+    with open(path, 'rb') as f:
+        # read 14 bytes (7 channels, each channel has 16 bits of data)
+        read_bytes = f.read(12)
+        _ = f.read(2)  # exclude channel 7 data
+        while read_bytes:
+            b = np.zeros((6, 1 if utterance.size == 0 else utterance.shape[1] + 1))
+            b[:, :-1] = utterance
+            # for each 2 bytes, convert to an integer and save each integer in 1 of 7 rows
+            b[:, -1] = [int.from_bytes(read_bytes[x:x + 2], byteorder='little', signed=True) for x in
+                        range(0, len(read_bytes), 2)]
+            utterance = b
+            read_bytes = f.read(12)
+            _ = f.read(2)  # exclude channel 7 data
+    return utterance
 
 
 class AudioParser(object):
@@ -104,34 +124,47 @@ class SpectrogramParser(AudioParser):
         self.noise_prob = audio_conf.get('noise_prob')
 
     def parse_audio(self, audio_path):
-        if self.speed_volume_perturb:
-            y = load_randomly_augmented_audio(audio_path, self.sample_rate)
+        if audio_path.endswith('.adc'):
+            y = load_emg(audio_path)
+
+            y = fftn(y).real
+            y = torch.FloatTensor(y)
+
+            if self.normalize:
+                mean = y.mean()
+                std = y.std()
+                y.add_(-mean)
+                y.div_(std)
+
+            return y
         else:
-            y = load_audio(audio_path)
-        if self.noiseInjector:
-            add_noise = np.random.binomial(1, self.noise_prob)
-            if add_noise:
-                y = self.noiseInjector.inject_noise(y)
-        n_fft = int(self.sample_rate * self.window_size)
-        win_length = n_fft
-        hop_length = int(self.sample_rate * self.window_stride)
-        # STFT
-        D = librosa.stft(y, n_fft=n_fft, hop_length=hop_length,
-                         win_length=win_length, window=self.window)
-        spect, phase = librosa.magphase(D)
-        # S = log(S+1)
-        spect = np.log1p(spect)
-        spect = torch.FloatTensor(spect)
-        if self.normalize:
-            mean = spect.mean()
-            std = spect.std()
-            spect.add_(-mean)
-            spect.div_(std)
+            if self.speed_volume_perturb:
+                y = load_randomly_augmented_audio(audio_path, self.sample_rate)
+            else:
+                y = load_audio(audio_path)
+            if self.noiseInjector:
+                add_noise = np.random.binomial(1, self.noise_prob)
+                if add_noise:
+                    y = self.noiseInjector.inject_noise(y)
+            n_fft = int(self.sample_rate * self.window_size)
+            win_length = n_fft
+            hop_length = int(self.sample_rate * self.window_stride)
+            # STFT
+            D = librosa.stft(y, n_fft=n_fft, hop_length=hop_length,
+                             win_length=win_length, window=self.window)
+            spect, phase = librosa.magphase(D)
+            # S = log(S+1)
+            spect = np.log1p(spect)
+            spect = torch.FloatTensor(spect)
+            if self.normalize:
+                mean = spect.mean()
+                std = spect.std()
+                spect.add_(-mean)
+                spect.div_(std)
 
-        if self.spec_augment:
-            spect = spec_augment(spect)
-
-        return spect
+            if self.spec_augment:
+                spect = spec_augment(spect)
+            return spect
 
     def parse_transcript(self, transcript_path):
         raise NotImplementedError
