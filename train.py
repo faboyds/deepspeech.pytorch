@@ -139,9 +139,9 @@ if __name__ == '__main__':
                                            save_n_recent_models=args.save_n_recent_models)
 
     if main_proc and args.visdom:
-        visdom_logger = VisdomLogger(args.id + '-' + int(time.time()), args.epochs)
+        visdom_logger = VisdomLogger(args.id + "-" + str(int(time.time())), args.epochs)
     if main_proc and args.tensorboard:
-        tensorboard_logger = TensorBoardLogger(args.id + '-' + int(time.time()), args.log_dir, args.log_params)
+        tensorboard_logger = TensorBoardLogger(args.id + "-" + str(int(time.time())), args.log_dir, args.log_params)
 
     if args.load_auto_checkpoint:
         latest_checkpoint = checkpoint_handler.find_latest_checkpoint()
