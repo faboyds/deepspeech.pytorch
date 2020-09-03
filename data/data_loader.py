@@ -102,7 +102,7 @@ class NoiseInjection(object):
 
 
 class SpectrogramParser(AudioParser):
-    def __init__(self, audio_conf, normalize=False, speed_volume_perturb=False, spec_augment=False):
+    def __init__(self, audio_conf, normalize=False, speed_volume_perturb=False, spec_augment=False, phoneme_level=False):
         """
         Parses audio file into spectrogram with optional normalization and various augmentations
         :param audio_conf: Dictionary containing the sample rate, window and the window length/stride in seconds
@@ -122,6 +122,7 @@ class SpectrogramParser(AudioParser):
                                             audio_conf['noise_levels']) if audio_conf.get(
             'noise_dir') is not None else None
         self.noise_prob = audio_conf.get('noise_prob')
+        self.phoneme_level = phoneme_level
 
     def parse_audio(self, audio_path):
         if audio_path.endswith('.adc'):
@@ -172,7 +173,7 @@ class SpectrogramParser(AudioParser):
 
 class SpectrogramDataset(Dataset, SpectrogramParser):
     def __init__(self, audio_conf, manifest_filepath, labels, normalize=False, speed_volume_perturb=False,
-                 spec_augment=False):
+                 spec_augment=False, phoneme_level=False):
         """
         Dataset that loads tensors via a csv containing file paths to audio files and transcripts separated by
         a comma. Each new line is a different sample. Example below:
@@ -193,18 +194,31 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         self.ids = ids
         self.size = len(ids)
         self.labels_map = dict([(labels[i], i) for i in range(len(labels))])
-        super(SpectrogramDataset, self).__init__(audio_conf, normalize, speed_volume_perturb, spec_augment)
+        super(SpectrogramDataset, self).__init__(audio_conf, normalize, speed_volume_perturb, spec_augment, phoneme_level)
 
     def __getitem__(self, index):
         sample = self.ids[index]
         audio_path, transcript_path = sample[0], sample[1]
         spect = self.parse_audio(audio_path)
-        transcript = self.parse_transcript(transcript_path)
+        if audio_path.endswith('.adc') and self.phoneme_level:
+            transcript = self.parse_transcript_remove_alignments(transcript_path)
+        else:
+            transcript = self.parse_transcript(transcript_path)
         return spect, transcript
 
     def parse_transcript(self, transcript_path):
         with open(transcript_path, 'r', encoding='utf8') as transcript_file:
             transcript = transcript_file.read().replace('\n', '')
+        transcript = list(filter(None, [self.labels_map.get(x) for x in list(transcript)]))
+        return transcript
+
+    def parse_transcript_remove_alignments(self, transcript_path):
+        with open(transcript_path, 'r', encoding='utf8') as transcript_file:
+            transcript = ''
+            for line in transcript_file:
+                if line.strip():
+                    phoneme = line.split()[-1].replace('\n', '')
+                    transcript.join(phoneme)
         transcript = list(filter(None, [self.labels_map.get(x) for x in list(transcript)]))
         return transcript
 

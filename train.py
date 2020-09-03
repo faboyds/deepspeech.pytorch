@@ -87,7 +87,8 @@ parser.add_argument('--keep-batchnorm-fp32', type=str, default=None,
                     help='Overrides Apex keep_batch_norm_fp32 flag')
 parser.add_argument('--loss-scale', default=1,
                     help='Loss scaling used by Apex. Default is 1 due to warp-ctc not supporting scaling of gradients')
-
+parser.add_argument('--phoneme-level', dest='phoneme_level', action='store_true', default=False,
+                    help='Turns on phoneme level recognition, instead of words')
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -190,13 +191,15 @@ if __name__ == '__main__':
                                        labels=model.labels,
                                        normalize=True,
                                        speed_volume_perturb=args.speed_volume_perturb,
-                                       spec_augment=args.spec_augment)
+                                       spec_augment=args.spec_augment,
+                                       phoneme_level=args.phoneme_level)
     test_dataset = SpectrogramDataset(audio_conf=model.audio_conf,
                                       manifest_filepath=args.val_manifest,
                                       labels=model.labels,
                                       normalize=True,
                                       speed_volume_perturb=False,
-                                      spec_augment=False)
+                                      spec_augment=False,
+                                      phoneme_level=args.phoneme_level)
     if not args.distributed:
         train_sampler = DSRandomSampler(dataset=train_dataset,
                                         batch_size=args.batch_size,
