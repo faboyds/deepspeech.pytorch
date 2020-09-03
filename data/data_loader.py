@@ -200,7 +200,7 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         sample = self.ids[index]
         audio_path, transcript_path = sample[0], sample[1]
         spect = self.parse_audio(audio_path)
-        if audio_path.endswith('.adc') and self.phoneme_level:
+        if self.phoneme_level:
             transcript = self.parse_transcript_remove_alignments(transcript_path)
         else:
             transcript = self.parse_transcript(transcript_path)
