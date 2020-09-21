@@ -3,6 +3,7 @@ import os
 from tempfile import NamedTemporaryFile
 
 from scipy.fft import fftn
+from scipy import signal
 import librosa
 import numpy as np
 import scipy.signal
@@ -102,7 +103,8 @@ class NoiseInjection(object):
 
 
 class SpectrogramParser(AudioParser):
-    def __init__(self, audio_conf, normalize=False, speed_volume_perturb=False, spec_augment=False, phoneme_level=False):
+    def __init__(self, audio_conf, normalize=False, speed_volume_perturb=False, spec_augment=False,
+                 phoneme_level=False):
         """
         Parses audio file into spectrogram with optional normalization and various augmentations
         :param audio_conf: Dictionary containing the sample rate, window and the window length/stride in seconds
@@ -126,18 +128,41 @@ class SpectrogramParser(AudioParser):
 
     def parse_audio(self, audio_path):
         if audio_path.endswith('.adc'):
-            y = load_emg(audio_path)
+            Y = load_emg(audio_path)
 
-            y = fftn(y).real
-            y = torch.FloatTensor(y)
+            example = None
 
-            if self.normalize:
-                mean = y.mean()
-                std = y.std()
-                y.add_(-mean)
-                y.div_(std)
+            # y = fftn(y).real
+            # y = torch.FloatTensor(y)
 
-            return y
+            n_fft = int(self.sample_rate * self.window_size)
+            win_length = n_fft
+            hop_length = int(self.sample_rate * self.window_stride)
+
+            for idx, y in enumerate(Y):
+                # STFT
+                D = librosa.stft(y, n_fft=n_fft, hop_length=hop_length,
+                                 win_length=win_length, window=self.window)
+                spect, phase = librosa.magphase(D)
+                # S = log(S+1)
+                spect = np.log1p(spect)
+                spect = torch.FloatTensor(spect)
+
+                if self.normalize:
+                    mean = spect.mean()
+                    std = spect.std()
+                    spect.add_(-mean)
+                    spect.div_(std)
+
+                if self.spec_augment:
+                    spect = spec_augment(spect)
+
+                if example != None:
+                    example = torch.cat((example, spect))
+                else:
+                    example = spect
+
+            return example
         else:
             if self.speed_volume_perturb:
                 y = load_randomly_augmented_audio(audio_path, self.sample_rate)
@@ -194,7 +219,8 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
         self.ids = ids
         self.size = len(ids)
         self.labels_map = dict([(labels[i], i) for i in range(len(labels))])
-        super(SpectrogramDataset, self).__init__(audio_conf, normalize, speed_volume_perturb, spec_augment, phoneme_level)
+        super(SpectrogramDataset, self).__init__(audio_conf, normalize, speed_volume_perturb, spec_augment,
+                                                 phoneme_level)
 
     def __getitem__(self, index):
         sample = self.ids[index]
@@ -218,7 +244,7 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
             for line in transcript_file:
                 if line.strip():
                     phoneme = line.split()[-1].replace('\n', '')
-                    transcript = transcript + ' ' + phoneme
+                    transcript.join(phoneme)
         transcript = list(filter(None, [self.labels_map.get(x) for x in list(transcript)]))
         return transcript
 
