@@ -218,7 +218,7 @@ class SpectrogramDataset(Dataset, SpectrogramParser):
             for line in transcript_file:
                 if line.strip():
                     phoneme = line.split()[-1].replace('\n', '')
-                    transcript.join(phoneme)
+                    transcript = transcript + ' ' + phoneme
         transcript = list(filter(None, [self.labels_map.get(x) for x in list(transcript)]))
         return transcript
 
