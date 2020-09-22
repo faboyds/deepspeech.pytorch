@@ -148,6 +148,12 @@ class SpectrogramParser(AudioParser):
                 spect = np.log1p(spect)
                 spect = torch.FloatTensor(spect)
 
+                #import matplotlib.pyplot as plt
+                #fig, ax = plt.subplots()
+                #img = librosa.display.specshow(librosa.amplitude_to_db(spect, ref=np.max), y_axis='log', x_axis='time', ax=ax)
+                #ax.set_title('Power spectrogram')
+                #fig.savefig('my_figure.png')
+
                 if self.normalize:
                     mean = spect.mean()
                     std = spect.std()
