@@ -85,7 +85,6 @@ class BatchRNN(nn.Module):
         self.rnn = rnn_type(input_size=input_size, hidden_size=hidden_size,
                             bidirectional=bidirectional, bias=True)
         self.num_directions = 2 if bidirectional else 1
-        self.tanh = nn.Hardtanh(0, 20, inplace=True)
 
     def flatten_parameters(self):
         self.rnn.flatten_parameters()
@@ -98,7 +97,6 @@ class BatchRNN(nn.Module):
         x, _ = nn.utils.rnn.pad_packed_sequence(x)
         if self.bidirectional:
             x = x.view(x.size(0), x.size(1), 2, -1).sum(2).view(x.size(0), x.size(1), -1)  # (TxNxH*2) -> (TxNxH) by sum
-        x = self.tanh(x)
         return x
 
 
